@@ -144,12 +144,52 @@ function newSuspect(idx) {
   };
 }
 
+// BirthDateInput — three plain text boxes: [yr]年[mo]月[dy]日
+function BirthDateInput({value, onChange}) {
+  const parse = (str) => {
+    const m = (str||"").match(/^(\d{1,3})年(\d{1,2})月(\d{1,2})日$/);
+    return m ? {yr:m[1], mo:m[2], dy:m[3]} : {yr:"", mo:"", dy:""};
+  };
+  const [parts, setParts] = React.useState(()=>parse(value));
+  React.useEffect(()=>setParts(parse(value)), [value]);
+
+  const update = (field, val) => {
+    const next = {...parts, [field]: val};
+    setParts(next);
+    if (next.yr && next.mo && next.dy) {
+      onChange(`${next.yr}年${next.mo}月${next.dy}日`);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1 text-sm">
+      <input type="text" inputMode="numeric"
+        className="border rounded px-1 w-14 text-center"
+        placeholder="年" maxLength={3}
+        value={parts.yr} onChange={e=>update("yr",e.target.value)} />
+      <span>年</span>
+      <input type="text" inputMode="numeric"
+        className="border rounded px-1 w-10 text-center"
+        placeholder="月" maxLength={2}
+        value={parts.mo} onChange={e=>update("mo",e.target.value)} />
+      <span>月</span>
+      <input type="text" inputMode="numeric"
+        className="border rounded px-1 w-10 text-center"
+        placeholder="日" maxLength={2}
+        value={parts.dy} onChange={e=>update("dy",e.target.value)} />
+      <span>日</span>
+    </div>
+  );
+}
+
 // MinguoDateTimeInput component
+// Uses local useState so each dropdown selection is immediately visible,
+// and propagates up only when year+month+day are all filled.
 function MinguoDateTimeInput({value, onChange}) {
-  const parsed = React.useMemo(() => {
-    if (!value) return {yr:"",mo:"",dy:"",hr:"",mn:""};
-    const d = new Date(value);
-    if (isNaN(d)) return {yr:"",mo:"",dy:"",hr:"",mn:""};
+  const toparts = (iso) => {
+    if (!iso) return {yr:"",mo:"",dy:"",hr:"0",mn:"0"};
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return {yr:"",mo:"",dy:"",hr:"0",mn:"0"};
     return {
       yr: String(d.getFullYear()-1911),
       mo: String(d.getMonth()+1),
@@ -157,15 +197,23 @@ function MinguoDateTimeInput({value, onChange}) {
       hr: String(d.getHours()),
       mn: String(d.getMinutes())
     };
+  };
+
+  const [parts, setParts] = React.useState(() => toparts(value));
+
+  // Sync when external value changes (e.g. auto-fill for obstacle type 3)
+  React.useEffect(() => {
+    setParts(toparts(value));
   }, [value]);
 
   const update = (field, val) => {
-    const next = {...parsed, [field]: val};
+    const next = {...parts, [field]: val};
+    setParts(next); // always update local display immediately
     if (next.yr && next.mo && next.dy) {
+      // Only propagate when date is complete
       onChange(parseMinguoDateTime(next.yr, next.mo, next.dy, next.hr||"0", next.mn||"0"));
-    } else {
-      onChange("");
     }
+    // Don't call onChange("") — keep parent's last valid value if date incomplete
   };
 
   const months = Array.from({length:12},(_,i)=>i+1);
@@ -180,28 +228,28 @@ function MinguoDateTimeInput({value, onChange}) {
         type="number"
         className="border rounded px-1 w-16 text-center"
         placeholder="年"
-        value={parsed.yr}
+        value={parts.yr}
         min="1"
         max="200"
         onChange={e=>update("yr",e.target.value)}
       />
       <span>年</span>
-      <select className="border rounded px-1" value={parsed.mo} onChange={e=>update("mo",e.target.value)}>
+      <select className="border rounded px-1" value={parts.mo} onChange={e=>update("mo",e.target.value)}>
         <option value="">月</option>
-        {months.map(m=><option key={m} value={m}>{m}</option>)}
+        {months.map(m=><option key={m} value={String(m)}>{m}</option>)}
       </select>
       <span>月</span>
-      <select className="border rounded px-1" value={parsed.dy} onChange={e=>update("dy",e.target.value)}>
+      <select className="border rounded px-1" value={parts.dy} onChange={e=>update("dy",e.target.value)}>
         <option value="">日</option>
-        {days.map(d=><option key={d} value={d}>{d}</option>)}
+        {days.map(d=><option key={d} value={String(d)}>{d}</option>)}
       </select>
       <span>日</span>
-      <select className="border rounded px-1" value={parsed.hr} onChange={e=>update("hr",e.target.value)}>
-        {hours.map(h=><option key={h} value={h}>{String(h).padStart(2,'0')}</option>)}
+      <select className="border rounded px-1" value={parts.hr} onChange={e=>update("hr",e.target.value)}>
+        {hours.map(h=><option key={h} value={String(h)}>{String(h).padStart(2,'0')}</option>)}
       </select>
       <span>時</span>
-      <select className="border rounded px-1" value={parsed.mn} onChange={e=>update("mn",e.target.value)}>
-        {minutes.map(m=><option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+      <select className="border rounded px-1" value={parts.mn} onChange={e=>update("mn",e.target.value)}>
+        {minutes.map(m=><option key={m} value={String(m)}>{String(m).padStart(2,'0')}</option>)}
       </select>
       <span>分</span>
     </div>
@@ -345,9 +393,7 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">出生年月日</label>
-                <input type="text" className="w-full border rounded px-2 py-1"
-                  placeholder="例：82年10月18日"
-                  value={suspect.dob} onChange={e=>updateField("dob",e.target.value)} />
+                <BirthDateInput value={suspect.dob} onChange={v=>updateField("dob",v)} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">身分證號</label>
