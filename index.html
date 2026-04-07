@@ -628,8 +628,8 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
   // docx@7 UMD build loaded via <script> tag, available as window.docx
   const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, ShadingType} = window.docx;
 
-  const boldKai = (text, size=56) => new TextRun({text, bold:true, font:"標楷體", size});
-  const kai = (text, size=56) => new TextRun({text, font:"標楷體", size});
+  const boldKai = (text, size=28) => new TextRun({text, bold:true, font:"標楷體", size});
+  const kai = (text, size=28) => new TextRun({text, font:"標楷體", size});
   const newline = () => new TextRun({text:"", break:1});
 
   const cellStyle = {
@@ -658,7 +658,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
 
   const titleRow = new TableRow({children:[
     makeCell([
-      makePara([boldKai(titleText, 104)], {alignment: AlignmentType.CENTER})
+      makePara([boldKai(titleText, 52)], {alignment: AlignmentType.CENTER})
     ], {
       columnSpan: 3,
       verticalAlign: VerticalAlign.CENTER,
@@ -671,7 +671,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     makeCell([
       makePara([
         kai(`發文日期：${caseInfo.issueDate||""}`),
-        new TextRun({text: "　　", font:"標楷體", size:56}),
+        new TextRun({text: "　　", font:"標楷體", size:28}),
         kai(`發文字號：${caseInfo.issueNumber||""}`)
       ])
     ], {columnSpan: 3, verticalAlign: VerticalAlign.CENTER})
