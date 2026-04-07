@@ -8,7 +8,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/docx@8/build/index.js"></script>
+<script src="https://unpkg.com/docx@7/build/index.js"></script>
 <style>
   body { font-family: '標楷體', 'DFKai-SB', serif; }
   .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; }
@@ -50,8 +50,7 @@ const EVIDENCE_ITEMS = [
   {id:"e3", label:"嫌疑人身分證件、指紋卡、口卡片", hasText:false},
   {id:"e4", label:"嫌疑人刑案資料", hasText:false},
   {id:"e5", label:"逮捕通知書（須記載逮捕日、時、分）", hasText:false},
-  {id:"e6", label:"搜索票及搜索扣押筆錄、收據", hasText:false},
-  {id:"e7", label:"其他：", hasText:true}
+  {id:"e6", label:"搜索票及搜索扣押筆錄、收據", hasText:false}
 ];
 
 const DETENTION_ITEMS = [
@@ -89,7 +88,7 @@ function isoToMinguoDate(iso) {
 
 function parseMinguoDateTime(yr, mo, dy, hr, mn) {
   if (!yr || !mo || !dy) return "";
-  const fullYr = parseInt(yr) + 1911;
+  const fullYr = parseInt(yr, 10) + 1911;
   const moStr = String(mo).padStart(2,'0');
   const dyStr = String(dy).padStart(2,'0');
   const hrStr = String(hr||0).padStart(2,'0');
@@ -137,7 +136,7 @@ function newSuspect(idx) {
     currentAddr: "",
     sameAsHousehold: false,
     lawyer: "無",
-    arrestTime: "",
+    arrestTime: (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10) + 'T00:00:00'; })(),
     arrestPlace: "",
     obstacles,
     activeTab: "basic"
@@ -257,7 +256,7 @@ function MinguoDateTimeInput({value, onChange}) {
 }
 
 // Obstacle row component
-function ObstacleRow({obstacleType, value, onChange, sunTimes, suspectName}) {
+function ObstacleRow({obstacleType, value, onChange, sunTimes}) {
   const {checked, start, end} = value;
 
   const handleAutoFill = () => {
@@ -273,7 +272,20 @@ function ObstacleRow({obstacleType, value, onChange, sunTimes, suspectName}) {
           type="checkbox"
           className="mt-1"
           checked={checked}
-          onChange={e=>onChange({...value, checked: e.target.checked})}
+          onChange={e=>{
+            const isChecked = e.target.checked;
+            if (!isChecked) {
+              // Unchecking: clear everything
+              onChange({...value, checked: false, start: "", end: ""});
+            } else if (obstacleType.id !== 3) {
+              // Checking non-sunrise type: pre-fill today at 00:00
+              const todayISO = new Date().toISOString().slice(0,10) + 'T00:00:00';
+              onChange({...value, checked: true, start: todayISO, end: todayISO});
+            } else {
+              // Checking type 3 (sunrise/sunset): just mark checked, user fills via auto-fill button
+              onChange({...value, checked: true});
+            }
+          }}
         />
         <span className="text-sm flex-1">{obstacleType.id}. {obstacleType.name}</span>
       </div>
@@ -312,11 +324,58 @@ function ObstacleRow({obstacleType, value, onChange, sunTimes, suspectName}) {
 // Suspect card component
 function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
   const [expanded, setExpanded] = React.useState(true);
+  const [ocrLoading, setOcrLoading] = React.useState(false);
+  const [ocrError, setOcrError] = React.useState("");
+  const fileInputRef = React.useRef(null);
 
   const displayName = suspect.name || `新犯嫌 ${index+1}`;
 
   const updateField = (field, val) => {
     onChange({...suspect, [field]: val});
+  };
+
+  const handleOcrUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    setOcrError("");
+    setOcrLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const dataUrl = ev.target.result;
+          const base64 = dataUrl.split(",")[1];
+          const mediaType = file.type || "image/jpeg";
+
+          const res = await fetch("/api/ocr", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({imageBase64: base64, mediaType})
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "辨識失敗");
+
+          // Auto-fill fields; keep existing value if API returned empty
+          const updates = {};
+          if (data.name) updates.name = data.name;
+          if (data.gender === "男" || data.gender === "女") updates.gender = data.gender;
+          if (data.idNumber) updates.idNumber = data.idNumber;
+          if (data.birthDate) updates.dob = data.birthDate;
+          if (data.householdAddr) updates.householdAddr = data.householdAddr;
+          if (data.currentAddr) updates.currentAddr = data.currentAddr;
+          onChange({...suspect, ...updates});
+          setOcrLoading(false);
+        } catch(err) {
+          setOcrError(err.message);
+          setOcrLoading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch(err) {
+      setOcrError(err.message);
+      setOcrLoading(false);
+    }
   };
 
   const updateObstacle = (id, val) => {
@@ -373,6 +432,26 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
 
           {suspect.activeTab === "basic" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* OCR import button */}
+              <div className="md:col-span-2 flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleOcrUpload}
+                />
+                <button
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-2 rounded shadow disabled:opacity-50"
+                  onClick={()=>fileInputRef.current.click()}
+                  disabled={ocrLoading}
+                >
+                  {ocrLoading ? "辨識中…" : "📷 智慧照片匯入"}
+                </button>
+                {ocrLoading && <span className="text-sm text-indigo-600 animate-pulse">AI 辨識中，請稍候…</span>}
+                {ocrError && <span className="text-sm text-red-600">⚠ {ocrError}</span>}
+                {!ocrLoading && !ocrError && <span className="text-xs text-gray-400">上傳智慧照片截圖，自動填入基本資料</span>}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">姓名</label>
                 <input type="text" className="w-full border rounded px-2 py-1"
@@ -453,7 +532,6 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
                   value={suspect.obstacles[ot.id]}
                   onChange={v=>updateObstacle(ot.id, v)}
                   sunTimes={sunTimes}
-                  suspectName={suspect.name}
                 />
               ))}
             </div>
@@ -544,7 +622,8 @@ function DeadlineSummary({suspects, isWanted}) {
 
 // DOCX generation
 async function generateReport(caseInfo, suspects, caseFacts, lawArticles, evidence, detention) {
-  const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, HeadingLevel, ShadingType} = window.docx;
+  // docx@7 UMD build loaded via <script> tag, available as window.docx
+  const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, ShadingType} = window.docx;
 
   const boldKai = (text, size=20) => new TextRun({text, bold:true, font:"標楷體", size});
   const kai = (text, size=20) => new TextRun({text, font:"標楷體", size});
@@ -570,24 +649,27 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     children: Array.isArray(runs) ? runs : [runs]
   });
 
-  // Title row
-  const agencyName = caseInfo.policeAgency;
-  const titleText = `${agencyName}解送人犯報告書`;
+  // Title row 1: [單位]解送人犯報告書（跨全行）
+  const unitName = caseInfo.unit || caseInfo.policeAgency;
+  const titleText = `${unitName}解送人犯報告書`;
 
   const titleRow = new TableRow({children:[
     makeCell([
       makePara([boldKai(titleText, 28)], {alignment: AlignmentType.CENTER})
     ], {
-      columnSpan: 2,
+      columnSpan: 3,
       verticalAlign: VerticalAlign.CENTER,
       shading: {type: ShadingType.CLEAR, color: "auto", fill: "E8EDF4"}
-    }),
-    makeCell([
-      makePara([kai(`發文日期：${caseInfo.issueDate||""}`), newline(), kai(`發文字號：${caseInfo.issueNumber||""}`)]),
-    ], {verticalAlign: VerticalAlign.CENTER})
+    })
   ]});
 
-  const rows = [titleRow];
+  // Title row 2: 發文日期 | 發文字號
+  const issueDateRow = new TableRow({children:[
+    makeCell([makePara([kai(`發文日期：${caseInfo.issueDate||""}`)])], {verticalAlign: VerticalAlign.CENTER}),
+    makeCell([makePara([kai(`發文字號：${caseInfo.issueNumber||""}`)])], {columnSpan: 2, verticalAlign: VerticalAlign.CENTER})
+  ]});
+
+  const rows = [titleRow, issueDateRow];
 
   // Per suspect rows
   suspects.forEach(s => {
@@ -636,7 +718,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
   // Evidence row
   const evidenceParas = EVIDENCE_ITEMS.map(item => {
     const v = evidence[item.id];
-    const checked = v?.checked !== false;
+    const checked = !!v?.checked;
     const mark = checked ? "■" : "□";
     let text = `${mark}${item.label}`;
     if (item.hasText && checked && v?.text) text += v.text;
@@ -678,7 +760,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     });
   });
 
-  obstacleParas.push(makePara([boldKai("■因上述法定障礙事由，其經過之時間如下：")]));
+  obstacleParas.push(makePara([boldKai("因上述法定障礙事由，其經過之時間合計如下：")]));
   suspects.forEach(s => {
     const mins = calcObstacleMinutes(s.obstacles);
     if (mins > 0) {
@@ -752,7 +834,10 @@ function App() {
   const [unit, setUnit] = React.useState("");
   const [agencyAddr, setAgencyAddr] = React.useState("");
   const [isWanted, setIsWanted] = React.useState(false);
-  const [issueDate, setIssueDate] = React.useState("");
+  const [issueDate, setIssueDate] = React.useState(() => {
+    const t = new Date();
+    return `${t.getFullYear()-1911}年${t.getMonth()+1}月${t.getDate()}日`;
+  });
   const [issueNumber, setIssueNumber] = React.useState("");
   const [targetProsecutor, setTargetProsecutor] = React.useState("");
 
@@ -763,7 +848,7 @@ function App() {
   const [caseFacts, setCaseFacts] = React.useState("");
   const [lawArticles, setLawArticles] = React.useState("");
 
-  // Evidence & detention (default all evidence checked)
+  // Evidence & detention (default all evidence checked except e7 "其他")
   const initEvidence = () => {
     const v = {};
     EVIDENCE_ITEMS.forEach(item => { v[item.id] = {checked: true, text:""}; });
@@ -787,9 +872,12 @@ function App() {
   const county = COUNTY_MAP[policeAgency];
 
   // Fetch sun times when agency or first suspect arrest date changes
-  const firstArrestDate = suspects.length > 0 && suspects[0].arrestTime
-    ? suspects[0].arrestTime.split("T")[0]
-    : new Date().toISOString().split("T")[0];
+  // Memoize so partial typing (e.g. year field mid-input) doesn't fire the API
+  const firstArrestDate = React.useMemo(() =>
+    suspects.length > 0 && suspects[0].arrestTime
+      ? suspects[0].arrestTime.split("T")[0]
+      : new Date().toISOString().split("T")[0]
+  , [suspects[0]?.arrestTime?.split("T")[0]]);
 
   React.useEffect(() => {
     if (!county) {
@@ -916,7 +1004,7 @@ function App() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">單位</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">單位（派出所/隊）</label>
             <input type="text" className="w-full border rounded px-2 py-1"
               value={unit} onChange={e=>setUnit(e.target.value)} />
           </div>
@@ -943,9 +1031,7 @@ function App() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">發文日期</label>
-            <input type="text" className="w-full border rounded px-2 py-1"
-              placeholder="例：115年04月01日"
-              value={issueDate} onChange={e=>setIssueDate(e.target.value)} />
+            <BirthDateInput value={issueDate} onChange={setIssueDate} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">發文字號</label>
