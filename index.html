@@ -68,6 +68,7 @@ const DETENTION_ITEMS = [
 function isoToMinguo(iso) {
   if (!iso) return "";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
   const yr = d.getFullYear() - 1911;
   const mo = String(d.getMonth()+1).padStart(2,'0');
   const dy = String(d.getDate()).padStart(2,'0');
@@ -79,6 +80,7 @@ function isoToMinguo(iso) {
 function isoToMinguoDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
   const yr = d.getFullYear() - 1911;
   const mo = String(d.getMonth()+1).padStart(2,'0');
   const dy = String(d.getDate()).padStart(2,'0');
@@ -496,7 +498,7 @@ function DeadlineSummary({suspects, isWanted}) {
 
 // DOCX generation
 async function generateReport(caseInfo, suspects, caseFacts, lawArticles, evidence, detention) {
-  const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, HeadingLevel} = window.docx;
+  const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, HeadingLevel, ShadingType} = window.docx;
 
   const boldKai = (text, size=20) => new TextRun({text, bold:true, font:"標楷體", size});
   const kai = (text, size=20) => new TextRun({text, font:"標楷體", size});
@@ -523,7 +525,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
   });
 
   // Title row
-  const agencyName = caseInfo.subAgency || caseInfo.policeAgency;
+  const agencyName = caseInfo.policeAgency;
   const titleText = `${agencyName}解送人犯報告書`;
 
   const titleRow = new TableRow({children:[
@@ -532,7 +534,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     ], {
       columnSpan: 2,
       verticalAlign: VerticalAlign.CENTER,
-      shading: {fill: "F0F0F0"}
+      shading: {type: ShadingType.CLEAR, color: "auto", fill: "E8EDF4"}
     }),
     makeCell([
       makePara([kai(`發文日期：${caseInfo.issueDate||""}`), newline(), kai(`發文字號：${caseInfo.issueNumber||""}`)]),
@@ -664,8 +666,13 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     makeCell([makePara([kai("接收人：")])], {columnSpan: 2})
   ]}));
 
+  // Column widths in twips (total content width ~9746 twips on A4 with 1080 margins)
+  // Col1: category label 1500 | Col2: field names 2000 | Col3: values 6246
+  const columnWidths = [1500, 2000, 6246];
+
   const table = new Table({
     width: {size: 100, type: WidthType.PERCENTAGE},
+    columnWidths,
     rows
   });
 
