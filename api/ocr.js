@@ -73,8 +73,8 @@ module.exports = async function handler(req, res) {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
         messages: [{
           role: 'user',
           content: [
@@ -88,7 +88,20 @@ module.exports = async function handler(req, res) {
             },
             {
               type: 'text',
-              text: '請辨識這張台灣警察系統智慧照片截圖中的資料，以JSON格式回傳以下欄位（找不到的欄位留空字串）：{"name":"姓名","gender":"性別只填男或女","idNumber":"身分證號","birthDate":"出生日期民國格式如052/12/24","householdAddr":"戶籍地","currentAddr":"現居地"}。只回傳JSON，不要其他文字。'
+              text: `你是一個精確的OCR系統，專門辨識台灣警察系統「智慧照片」截圖中的個人資料表格。
+圖片右側為一個兩欄表格，左欄是欄位名稱，右欄是資料值。請逐列仔細辨識每個欄位。
+
+辨識規則：
+- 【姓名】：中文姓名，通常2到4個字，逐字確認不可猜測
+- 【性別】：只填「男」或「女」
+- 【身分證號】：固定格式為1個大寫英文字母加9個數字，共10碼，請完整辨識每一碼
+- 【出生日期】：民國年格式，如「052/12/24」，保留前導零
+- 【戶籍地】：完整地址，包含縣市、區、路名、門牌號碼，逐字辨識不可省略
+- 【現居地】：完整地址，包含縣市、區、路名、門牌號碼，逐字辨識不可省略
+- 圖片解析度可能較低，請盡力辨識，無法確認的欄位留空字串
+
+只回傳以下JSON格式，不要任何其他文字或說明：
+{"name":"","gender":"","idNumber":"","birthDate":"","householdAddr":"","currentAddr":""}`
             }
           ]
         }]
