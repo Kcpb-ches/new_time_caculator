@@ -1,8 +1,8 @@
 // Vercel Serverless Function: OCR via Claude API
 // Requires env vars:
-//   ANTHROPIC_API_KEY  — Claude API key
-//   KV_REST_API_URL    — Vercel KV (auto-set when KV is connected to project)
-//   KV_REST_API_TOKEN  — Vercel KV (auto-set when KV is connected to project)
+//   ANTHROPIC_API_KEY       — Claude API key
+//   UPSTASH_REDIS_REST_URL  — Upstash Redis (auto-set when connected to project)
+//   UPSTASH_REDIS_REST_TOKEN— Upstash Redis (auto-set when connected to project)
 
 const DAILY_LIMIT = 20;
 
@@ -32,8 +32,8 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // --- IP rate limiting (requires Vercel KV) ---
-  const kvUrl = process.env.KV_REST_API_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN;
+  const kvUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (kvUrl && kvToken) {
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
