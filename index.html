@@ -628,8 +628,8 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
   // docx@7 UMD build loaded via <script> tag, available as window.docx
   const {Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, VerticalAlign, BorderStyle, ShadingType} = window.docx;
 
-  const boldKai = (text, size=20) => new TextRun({text, bold:true, font:"標楷體", size});
-  const kai = (text, size=20) => new TextRun({text, font:"標楷體", size});
+  const boldKai = (text, size=14) => new TextRun({text, bold:true, font:"標楷體", size});
+  const kai = (text, size=14) => new TextRun({text, font:"標楷體", size});
   const newline = () => new TextRun({text:"", break:1});
 
   const cellStyle = {
@@ -658,7 +658,7 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
 
   const titleRow = new TableRow({children:[
     makeCell([
-      makePara([boldKai(titleText, 28)], {alignment: AlignmentType.CENTER})
+      makePara([boldKai(titleText, 26)], {alignment: AlignmentType.CENTER})
     ], {
       columnSpan: 3,
       verticalAlign: VerticalAlign.CENTER,
@@ -666,10 +666,15 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     })
   ]});
 
-  // Title row 2: 發文日期 | 發文字號
+  // Title row 2: 發文日期 與 發文字號 同一格同一行
   const issueDateRow = new TableRow({children:[
-    makeCell([makePara([kai(`發文日期：${caseInfo.issueDate||""}`)])], {verticalAlign: VerticalAlign.CENTER}),
-    makeCell([makePara([kai(`發文字號：${caseInfo.issueNumber||""}`)])], {columnSpan: 2, verticalAlign: VerticalAlign.CENTER})
+    makeCell([
+      makePara([
+        kai(`發文日期：${caseInfo.issueDate||""}`),
+        new TextRun({text: "　　", font:"標楷體", size:14}),
+        kai(`發文字號：${caseInfo.issueNumber||""}`)
+      ])
+    ], {columnSpan: 3, verticalAlign: VerticalAlign.CENTER})
   ]});
 
   const rows = [titleRow, issueDateRow];
@@ -791,10 +796,22 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     ], {columnSpan: 3})
   ]}));
 
-  // 解交人/接收人
+  // 解交人/接收人（平均分配寬度）
   rows.push(new TableRow({children:[
-    makeCell([makePara([kai("解交人：")])], {columnSpan: 1}),
-    makeCell([makePara([kai("接收人：")])], {columnSpan: 2})
+    new TableCell({
+      ...cellStyle,
+      width: {size: 50, type: WidthType.PERCENTAGE},
+      columnSpan: 1,
+      children: [makePara([kai("解交人：")])],
+      verticalAlign: VerticalAlign.CENTER
+    }),
+    new TableCell({
+      ...cellStyle,
+      width: {size: 50, type: WidthType.PERCENTAGE},
+      columnSpan: 2,
+      children: [makePara([kai("接收人：")])],
+      verticalAlign: VerticalAlign.CENTER
+    })
   ]}));
 
   // Column widths in twips (total content width ~9746 twips on A4 with 1080 margins)
@@ -842,7 +859,7 @@ function App() {
     return `${t.getFullYear()-1911}年${t.getMonth()+1}月${t.getDate()}日`;
   });
   const [issueNumber, setIssueNumber] = React.useState("");
-  const [targetProsecutor, setTargetProsecutor] = React.useState("");
+  const [targetProsecutor, setTargetProsecutor] = React.useState("臺灣基隆地方檢察署");
 
   // Suspects
   const [suspects, setSuspects] = React.useState([]);
