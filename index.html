@@ -10,10 +10,13 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://unpkg.com/docx@7/build/index.js"></script>
 <style>
-  body { font-family: '標楷體', 'DFKai-SB', serif; }
+  body { font-family: 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', 'Noto Sans TC', sans-serif; font-size: 16px; }
   .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; }
   textarea { resize: vertical; }
   select, input[type=text], input[type=number] { font-family: inherit; }
+  /* 整體放大字體 */
+  .text-xs { font-size: 13px !important; }
+  .text-sm { font-size: 15px !important; }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -960,7 +963,7 @@ function App() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold tracking-wide">解送人犯報告書系統</h1>
-            <p className="text-blue-200 text-xs mt-0.5">設計：文一偵查林正賢　協作AI：Claude　(v3.0)</p>
+            <p className="text-blue-200 text-xs mt-0.5">基隆市警察局刑事警察大隊科技偵查隊　(v3.0)</p>
           </div>
           <div className="flex items-center gap-3">
             {sunLoading && (
@@ -1122,7 +1125,7 @@ function App() {
 
       {/* Footer */}
       <div className="text-center text-xs text-gray-400 mt-8 pb-4">
-        解送人犯報告書系統 v3.0 | 設計：文一偵查林正賢 | 協作AI：Claude
+        解送人犯報告書系統 v3.0 | 基隆市警察局刑事警察大隊科技偵查隊 | 協作AI：Claude
       </div>
     </div>
   );
