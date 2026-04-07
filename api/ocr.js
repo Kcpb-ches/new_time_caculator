@@ -98,7 +98,9 @@ module.exports = async function handler(req, res) {
     const json = await response.json();
     if (!response.ok) throw new Error(json.error?.message || response.statusText);
 
-    const text = json.content[0].text.trim();
+    let text = json.content[0].text.trim();
+    // Strip markdown code block if present (e.g. ```json ... ```)
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     const data = JSON.parse(text);
 
     // Convert birthDate: 052/12/24 → 52年12月24日
