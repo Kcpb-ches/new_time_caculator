@@ -434,10 +434,12 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
               className={`px-4 py-2 text-sm font-medium ${suspect.activeTab==="basic" ? "tab-active" : "text-gray-500 hover:text-gray-700"}`}
               onClick={()=>updateField("activeTab","basic")}
             >基本資料</button>
-            <button
-              className={`px-4 py-2 text-sm font-medium ${suspect.activeTab==="obstacle" ? "tab-active" : "text-gray-500 hover:text-gray-700"}`}
-              onClick={()=>updateField("activeTab","obstacle")}
-            >法定障礙事由 {totalObs > 0 ? `(${minutesToHM(totalObs)})` : ""}</button>
+            {!suspect.isLegal && (
+              <button
+                className={`px-4 py-2 text-sm font-medium ${suspect.activeTab==="obstacle" ? "tab-active" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={()=>updateField("activeTab","obstacle")}
+              >法定障礙事由 {totalObs > 0 ? `(${minutesToHM(totalObs)})` : ""}</button>
+            )}
           </div>
 
           {suspect.activeTab === "basic" && (
@@ -536,6 +538,15 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
                     <input type="text" className="w-full border rounded px-2 py-1"
                       value={suspect.lawyer} onChange={e=>updateField("lawyer",e.target.value)} />
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">拘提時間</label>
+                    <MinguoDateTimeInput value={suspect.arrestTime} onChange={v=>updateField("arrestTime",v)} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">拘提地點</label>
+                    <input type="text" className="w-full border rounded px-2 py-1"
+                      value={suspect.arrestPlace} onChange={e=>updateField("arrestPlace",e.target.value)} />
+                  </div>
                 </>
               ) : (
                 <>
@@ -561,16 +572,6 @@ function SuspectCard({suspect, index, onChange, onRemove, sunTimes}) {
                   </div>
                 </>
               )}
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">拘提時間</label>
-                <MinguoDateTimeInput value={suspect.arrestTime} onChange={v=>updateField("arrestTime",v)} />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">拘提地點</label>
-                <input type="text" className="w-full border rounded px-2 py-1"
-                  value={suspect.arrestPlace} onChange={e=>updateField("arrestPlace",e.target.value)} />
-              </div>
             </div>
           )}
 
@@ -628,7 +629,9 @@ function ChecklistSection({title, items, values, onChange}) {
 
 // Deadline summary table
 function DeadlineSummary({suspects, isWanted}) {
-  if (suspects.length === 0) return null;
+  const naturalPersons = suspects.filter(s => !s.isLegal);
+  if (naturalPersons.length === 0) return null;
+  suspects = naturalPersons;
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
       <h2 className="text-lg font-bold text-gray-800 mb-3 border-b pb-2">
@@ -732,14 +735,12 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     let subjectLabel, fieldNames, fieldValues;
     if (s.isLegal) {
       subjectLabel = "被移送法人";
-      fieldNames = ["公司名稱","統一編號","代表人姓名","公司所在地","拘提時間","拘提地點"];
+      fieldNames = ["公司名稱","統一編號","代表人姓名","公司所在地"];
       fieldValues = [
         s.companyName||"",
         s.taxId||"",
         s.repName||"",
         s.companyAddr||"",
-        s.arrestTime ? isoToMinguo(s.arrestTime) : "",
-        s.arrestPlace||"",
       ];
     } else {
       subjectLabel = "犯罪嫌疑人（被告）";
@@ -808,28 +809,27 @@ async function generateReport(caseInfo, suspects, caseFacts, lawArticles, eviden
     makeCell(detentionParas, {columnSpan: 2})
   ]}));
 
-  // Obstacles row
+  // Obstacles row (法人 excluded from obstacle calculations)
+  const naturalSuspects = suspects.filter(s => !s.isLegal);
   const obstacleParas = [];
   OBSTACLE_TYPES.forEach(ot => {
-    const anyChecked = suspects.some(s => s.obstacles[ot.id]?.checked);
+    const anyChecked = naturalSuspects.some(s => s.obstacles[ot.id]?.checked);
     const mark = anyChecked ? "■" : "□";
     obstacleParas.push(makePara([anyChecked ? boldKai(`${mark}${ot.name}`) : kai(`${mark}${ot.name}.`)]));
-    suspects.forEach(s => {
+    naturalSuspects.forEach(s => {
       const obs = s.obstacles[ot.id];
       if (obs?.checked && obs.start && obs.end) {
-        const sLabel = s.isLegal ? (s.companyName||"法人") : (s.name||"犯嫌");
-        const txt = `　${sLabel}（${isoToMinguo(obs.start)}至${isoToMinguo(obs.end)}）`;
+        const txt = `　${s.name||"犯嫌"}（${isoToMinguo(obs.start)}至${isoToMinguo(obs.end)}）`;
         obstacleParas.push(makePara([kai(txt)]));
       }
     });
   });
 
   obstacleParas.push(makePara([boldKai("因上述法定障礙事由，其經過之時間合計如下：")]));
-  suspects.forEach(s => {
+  naturalSuspects.forEach(s => {
     const mins = calcObstacleMinutes(s.obstacles);
     if (mins > 0) {
-      const sLabel2 = s.isLegal ? (s.companyName||"法人") : (s.name||"犯嫌");
-      obstacleParas.push(makePara([kai(`　${sLabel2}：${minutesToHM(mins)}`)]));
+      obstacleParas.push(makePara([kai(`　${s.name||"犯嫌"}：${minutesToHM(mins)}`)]));
     }
   });
 
